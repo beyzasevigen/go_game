@@ -24,7 +24,6 @@ public class GamePanel extends JFrame {
     private char[][] previousBoard = new char[SIZE][SIZE];
     private JTextArea moveLogArea;
 
-
     // Flags and state variables for gameplay logic
     private boolean iPassed;
     private boolean opponentPassed;
@@ -54,7 +53,7 @@ public class GamePanel extends JFrame {
         this.initialized = true; // Only set true when init and ready are both received
 
         setTitle("Go Game - Game Screen");
-        setSize(SIZE * CELL_SIZE + 50, SIZE * CELL_SIZE + 70);
+        //setSize(SIZE * CELL_SIZE + 250, SIZE * CELL_SIZE + 100);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
@@ -65,6 +64,18 @@ public class GamePanel extends JFrame {
                 drawBoard(g);
             }
         };
+        // Başlık ve log alanı için panel
+        JLabel logLabel = new JLabel("Move History");
+        logLabel.setHorizontalAlignment(SwingConstants.CENTER);
+
+        moveLogArea = new JTextArea();
+        moveLogArea.setEditable(false);
+        JScrollPane scrollPane = new JScrollPane(moveLogArea);
+        scrollPane.setPreferredSize(new Dimension(200, SIZE * CELL_SIZE));
+
+        JPanel rightPanel = new JPanel(new BorderLayout());
+        rightPanel.add(logLabel, BorderLayout.NORTH);
+        rightPanel.add(scrollPane, BorderLayout.CENTER);
         panel.setPreferredSize(new Dimension(SIZE * CELL_SIZE, SIZE * CELL_SIZE));
 
         // Handle mouse click events on the board
@@ -89,10 +100,14 @@ public class GamePanel extends JFrame {
                     sendMove(row, col, myColor, removedStones);
                     isMyTurn = false;
                     panel.repaint();
+                    moveLogArea.append(myColor + " placed at (" + row + "," + col + ")\n");
                 }
             }
         });
-        add(panel);
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        mainPanel.add(panel, BorderLayout.CENTER);
+        mainPanel.add(rightPanel, BorderLayout.EAST);
+        add(mainPanel);
 
         // Pass button to skip a turn
         JButton passButton = new JButton("Pass");
@@ -107,12 +122,21 @@ public class GamePanel extends JFrame {
             try {
                 socketHandler.sendMessage(new Message("pass", String.valueOf(myColor)));
                 isMyTurn = false;
+                moveLogArea.append(myColor + " passed\n");
             } catch (IOException ex) {
                 JOptionPane.showMessageDialog(this, "Failed to send pass message.");
             }
         });
         add(passButton, BorderLayout.SOUTH);
 
+        // Move log area setup
+        moveLogArea.setEditable(false);
+        moveLogArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        moveLogArea.setMargin(new Insets(0, 0, 0, 0));
+        moveLogArea.setBackground(new Color(245, 245, 245));
+
+        //scrollPane.setPreferredSize(new Dimension(200, SIZE * CELL_SIZE));
+        //add(scrollPane, BorderLayout.EAST); // placed it to right side of the board
         // Listen for incoming messages from the server
         new Thread(() -> {
             while (true) {
@@ -202,6 +226,9 @@ public class GamePanel extends JFrame {
                 }
             }
         });
+        pack();
+        setResizable(false);
+        setLocationRelativeTo(null);
     }
 
     private void handleIncomingMove(String payload) {
@@ -229,6 +256,7 @@ public class GamePanel extends JFrame {
         isMyTurn = true;
         iPassed = false;
         repaint(); // Redraw the board with updates
+        moveLogArea.append(color + ": (" + row + "," + col + ")\n");
     }
 
     private void drawBoard(Graphics g) {
@@ -265,6 +293,10 @@ public class GamePanel extends JFrame {
         capturedByWhite = 0;
         lastKoPosition = null;
         lastKoCaptured.clear();
+
+        if (moveLogArea != null) {
+            moveLogArea.setText("");
+        }
     }
 
     private void showWaitingDialog(String message) {
@@ -451,6 +483,8 @@ public class GamePanel extends JFrame {
 
         try {
             socketHandler.sendMessage(new Message("move", payload.toString()));
+            //Hamleyi kullanıcıya gösteren log alanı
+            moveLogArea.append(color + ": (" + row + "," + col + ")\n");
         } catch (IOException e) {
             JOptionPane.showMessageDialog(this, "Move could not be sent.");
         }
@@ -463,6 +497,7 @@ public class GamePanel extends JFrame {
         // If the current player did not also pass, they get the next turn.
         if (!iPassed) {
             JOptionPane.showMessageDialog(this, "Opponent passed. It's your turn.");
+            moveLogArea.append((myColor == 'B' ? 'W' : 'B') + " passed\n");
             isMyTurn = true;
             iPassed = false;
         }

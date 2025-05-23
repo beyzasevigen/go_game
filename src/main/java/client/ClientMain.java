@@ -7,7 +7,7 @@ package client;
 public class ClientMain {
 
     public static void main(String[] args) {
-        String serverIp = "localhost"; // Server IP address
+        String serverIp = "16.171.6.36"; // Server IP address
         int serverPort = 12345;        // Server port number
 
         StartPanel sp = new StartPanel(serverIp, serverPort);

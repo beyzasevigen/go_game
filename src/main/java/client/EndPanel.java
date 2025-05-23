@@ -40,7 +40,7 @@ public class EndPanel extends JFrame {
         restartButton.addActionListener(e -> {
             dispose(); // Close this window
             SwingUtilities.invokeLater(() -> {
-                new StartPanel("localhost", 12345).setVisible(true);
+                new StartPanel("16.171.6.36", 12345).setVisible(true);
             });
         });
 

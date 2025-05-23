@@ -1,13 +1,12 @@
 client\GamePanel$2.class
 client\ClientSocketHandler.class
+client\EndPanel.class
 server\ServerSocketHandler$ClientHandler.class
 client\ClientMain.class
+client\GamePanel.class
 client\GamePanel$3.class
 client\GamePanel$1.class
-server\ServerSocketHandler.class
-client\StartPanel.class
-client\EndPanel.class
-client\GamePanel.class
 server\ServerSocketHandler$GameRoom.class
+server\ServerSocketHandler.class
 shared\Message.class
-server\ServerMain.class
+client\StartPanel.class

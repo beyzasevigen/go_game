@@ -37,6 +37,8 @@ public class StartPanel extends JFrame {
             waitingDialog.add(waitLabel);
             waitingDialog.setSize(300, 100);
             waitingDialog.setLocationRelativeTo(this);
+            
+            SwingUtilities.invokeLater(() -> waitingDialog.setVisible(true));
 
             new Thread(() -> {
                 ClientSocketHandler tempConnection = null;
