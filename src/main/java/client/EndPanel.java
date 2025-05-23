@@ -33,10 +33,7 @@ public class EndPanel extends JFrame {
         restartButton.addActionListener(e -> {
             dispose(); // bu pencereyi kapat
             SwingUtilities.invokeLater(() -> {
-                String ip = JOptionPane.showInputDialog(null, "Sunucu IP adresini girin:", "localhost");
-                if (ip != null && !ip.isEmpty()) {
-                    new StartPanel(ip, 12345).setVisible(true);  // ✔ Daha temiz: yeni bağlantı buradan başlar
-                }
+                new StartPanel("localhost", 12345).setVisible(true);  // direkt localhost'a bağlan
             });
 
         });
