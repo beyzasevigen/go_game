@@ -6,6 +6,10 @@ import javax.swing.*;
 import java.awt.*;
 import java.io.IOException;
 
+/**
+ * StartPanel displays the first screen where the user can start the game.
+ * It connects to the server and waits for an opponent.
+ */
 public class StartPanel extends JFrame {
 
     String serverIp;
@@ -15,18 +19,20 @@ public class StartPanel extends JFrame {
         this.serverIp = serverIp;
         this.serverPort = serverPort;
 
-        setTitle("Go Oyunu - Başlangıç");
+        setTitle("Go Game - Start");
         setSize(300, 200);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
-        JButton startButton = new JButton("Oyuna Başla");
+        JButton startButton = new JButton("Start Game");
 
+        // When the user clicks the button, try to connect to the server
         startButton.addActionListener(e -> {
             startButton.setEnabled(false);
 
-            JDialog waitingDialog = new JDialog(this, "Bekleniyor...", true);
-            JLabel waitLabel = new JLabel("Rakip oyuncu bekleniyor, lütfen bekleyin...");
+            // Waiting dialog shown while waiting for opponent
+            JDialog waitingDialog = new JDialog(this, "Waiting...", true);
+            JLabel waitLabel = new JLabel("Waiting for opponent, please wait...");
             waitLabel.setHorizontalAlignment(SwingConstants.CENTER);
             waitingDialog.add(waitLabel);
             waitingDialog.setSize(300, 100);
@@ -40,7 +46,7 @@ public class StartPanel extends JFrame {
                     Message initMsg = null;
                     Message readyMsg = null;
 
-                    // init ve ready bekleniyor
+                    // Wait for both 'init' and 'ready' messages from server
                     while (true) {
                         Message msg = tempConnection.readMessage();
                         if (msg == null) {
@@ -48,7 +54,7 @@ public class StartPanel extends JFrame {
                         }
 
                         if (msg.type.equals("init")) {
-                            System.out.println("StartPanel içinde INIT geldi: " + msg.payload);
+                            System.out.println("INIT received in StartPanel: " + msg.payload);
                             initMsg = msg;
                         } else if (msg.type.equals("ready")) {
                             readyMsg = msg;
@@ -64,7 +70,7 @@ public class StartPanel extends JFrame {
 
                     SwingUtilities.invokeLater(() -> {
                         waitingDialog.dispose();
-                        dispose(); // StartPanel'i kapat
+                        dispose(); // Close StartPanel
                         GamePanel gm = new GamePanel(serverIp, serverPort, finalConnection, finalInit.payload);
                         gm.setVisible(true);
                     });
@@ -73,7 +79,7 @@ public class StartPanel extends JFrame {
                     ex.printStackTrace();
                     SwingUtilities.invokeLater(() -> {
                         waitingDialog.dispose();
-                        JOptionPane.showMessageDialog(this, "Bağlantı hatası.");
+                        JOptionPane.showMessageDialog(this, "Connection error.");
                         startButton.setEnabled(true);
                     });
                     if (tempConnection != null) {

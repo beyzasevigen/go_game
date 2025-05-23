@@ -3,39 +3,45 @@ package client;
 import javax.swing.*;
 import java.awt.*;
 
+/**
+ * EndPanel displays the final result of the game.
+ * It shows the scores and provides a button to restart.
+ */
 public class EndPanel extends JFrame {
 
     public EndPanel(double blackScore, double whiteScore) {
-        setTitle("Oyun Bitti");
+        setTitle("Game Over");
         setSize(300, 250);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
 
+        // Determine the winner based on scores
         String winner;
         if (blackScore > whiteScore) {
-            winner = "Siyah kazandı!";
+            winner = "Black wins!";
         } else if (whiteScore > blackScore) {
-            winner = "Beyaz kazandı!";
+            winner = "White wins!";
         } else {
-            winner = "Berabere!";
+            winner = "It's a draw!";
         }
 
+        // Show score and result
         JLabel resultLabel = new JLabel(
-                "<html>Oyun sona erdi!<br><br>"
-                + "Siyah: " + blackScore + " puan<br>"
-                + "Beyaz: " + whiteScore + " puan<br><br>"
+                "<html>The game has ended!<br><br>"
+                + "Black: " + blackScore + " points<br>"
+                + "White: " + whiteScore + " points<br><br>"
                 + winner + "</html>",
                 SwingConstants.CENTER
         );
 
-        JButton restartButton = new JButton("Yeniden Başlat");
+        // Restart button to return to StartPanel
+        JButton restartButton = new JButton("Restart");
         restartButton.addActionListener(e -> {
-            dispose(); // bu pencereyi kapat
+            dispose(); // Close this window
             SwingUtilities.invokeLater(() -> {
-                new StartPanel("localhost", 12345).setVisible(true);  // direkt localhost'a bağlan
+                new StartPanel("localhost", 12345).setVisible(true);
             });
-
         });
 
         add(resultLabel, BorderLayout.CENTER);

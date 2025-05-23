@@ -5,6 +5,10 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 
+/**
+ * ServerSocketHandler is the main server class responsible for
+ * accepting client connections and managing game rooms.
+ */
 public class ServerSocketHandler {
 
     private static final int PORT = 12345;
@@ -13,13 +17,13 @@ public class ServerSocketHandler {
 
     public static void main(String[] args) {
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
-            System.out.println("Sunucu başlatıldı...");
+            System.out.println("Server started...");
 
             while (true) {
                 Socket clientSocket = serverSocket.accept();
-                System.out.println("Yeni client bağlandı: " + clientSocket.getInetAddress());
+                System.out.println("New client connected: " + clientSocket.getInetAddress());
 
-                // Yeni oyuncuyu uygun bir oyun odasına yerleştir
+                // Assign the new player to an available room
                 assignClientToRoom(clientSocket);
             }
         } catch (IOException e) {
@@ -27,7 +31,7 @@ public class ServerSocketHandler {
         }
     }
 
-    // Yeni gelen client’ı uygun bir odaya ata
+    // Assigns a newly connected client to an available game room
     private static void assignClientToRoom(Socket socket) throws IOException {
         for (GameRoom room : rooms) {
             if (room.hasSpace()) {
@@ -36,13 +40,13 @@ public class ServerSocketHandler {
             }
         }
 
-        // Eğer boş oda yoksa yeni oda oluştur
+        // If no room has space, create a new one
         GameRoom newRoom = new GameRoom();
         newRoom.addPlayer(socket);
         rooms.add(newRoom);
     }
 
-    // İç sınıf: GameRoom (her biri 2 oyuncu barındırır)
+    // Inner class representing a game room (holds up to 2 players)
     static class GameRoom {
 
         private List<ClientHandler> players = new ArrayList<>();
@@ -62,7 +66,7 @@ public class ServerSocketHandler {
                 new Thread(handler).start();
             } catch (IOException e) {
                 e.printStackTrace();
-                System.out.println("❌ ClientHandler oluşturulamadı, oyuncu eklenemedi.");
+                System.out.println("❌ Failed to create ClientHandler, player not added.");
                 return;
             }
 
@@ -78,61 +82,64 @@ public class ServerSocketHandler {
 
                     for (ClientHandler p : players) {
                         p.setPassed(false);
-                        System.out.println(">>> Sunucu INIT gönderiyor: " + p.getColor());
+                        System.out.println(">>> Server sending INIT: " + p.getColor());
                         p.sendMessage(new Message("init", p.getColor()));
                     }
 
                     broadcast(new Message("ready", "Game is ready!"));
                 } else {
-                    System.out.println("❗ Oyuncular geçersiz ya da bağlantı kopmuş. Oyun başlatılamıyor.");
-                    players.clear(); // oda bozuksa sıfırla
+                    System.out.println("❗ Invalid players or connection lost. Game cannot start.");
+                    players.clear(); // Clear the room if it’s broken
                 }
             }
         }
 
         public void removePlayer(ClientHandler handler) {
             players.remove(handler);
-            System.out.println("Oyuncu odadan ayrıldı.");
+            System.out.println("Player removed from room.");
 
             if (players.isEmpty()) {
                 ServerSocketHandler.rooms.remove(this);
-                System.out.println("Oda boş kaldı, silindi.");
+                System.out.println("Room is empty. Deleted.");
             } else if (players.size() == 1) {
                 ClientHandler remaining = players.get(0);
 
-                // Güvenli bağlantı kontrolü
+                // Check if remaining player's connection is alive
                 if (remaining != null && remaining.isAlive()) {
-                    remaining.sendMessage(new Message("waiting", "Rakip bağlantıyı kaybetti. Yeni oyuncu bekleniyor..."));
+                    remaining.sendMessage(new Message("waiting", "Opponent disconnected. Waiting for a new player..."));
                 } else {
-                    System.out.println("❗ Kalan oyuncu bağlantısını kaybetmiş. Oda temizleniyor.");
+                    System.out.println("❗ Remaining player's connection is lost. Cleaning up room.");
                     players.clear();
                     ServerSocketHandler.rooms.remove(this);
                 }
             } else {
-                // Teorik olarak 2+ oyuncu olmamalı ama yine de koruyalım
-                System.out.println("⚠ Uyarı: Odaya beklenmeyen şekilde fazla oyuncu var.");
+                // Should never happen, but clean up anyway
+                System.out.println("⚠ Warning: Unexpected number of players in room.");
                 players.clear();
                 ServerSocketHandler.rooms.remove(this);
             }
         }
 
+        // Sends a message to all players in the room
         public void broadcast(Message msg) {
             for (ClientHandler ch : players) {
                 ch.sendMessage(msg);
             }
         }
 
+        // Checks if both players passed their turn (end condition)
         public void checkEndCondition() {
             if (players.size() == 2) {
                 boolean p0 = players.get(0).hasPassed();
                 boolean p1 = players.get(1).hasPassed();
-                System.out.println(">>> Oda kontrolü. Passed: " + p0 + ", " + p1);
+                System.out.println(">>> Room check. Passed: " + p0 + ", " + p1);
                 if (p0 && p1) {
                     broadcast(new Message("end", ""));
                 }
             }
         }
 
+        // Returns the opponent of the given player
         public ClientHandler getOpponent(ClientHandler me) {
             for (ClientHandler p : players) {
                 if (p != me) {
@@ -143,7 +150,7 @@ public class ServerSocketHandler {
         }
     }
 
-    // ClientHandler artık bağlı olduğu oda bilgisine sahip
+    // Represents a connected client and manages their messages
     static class ClientHandler implements Runnable {
 
         private Socket socket;
@@ -185,6 +192,7 @@ public class ServerSocketHandler {
             this.playerIndex = index;
         }
 
+        // Sends a message to this client
         public void sendMessage(Message msg) {
             try {
                 out.writeObject(msg);
@@ -200,23 +208,24 @@ public class ServerSocketHandler {
                 Object obj;
                 while ((obj = in.readObject()) != null) {
                     if (obj instanceof Message msg) {
-                        System.out.println("Client mesajı: " + msg.type + " - " + msg.payload);
+                        System.out.println("Client message: " + msg.type + " - " + msg.payload);
 
                         if (msg.type.equals("pass")) {
                             this.setPassed(true);
                             ClientHandler opponent = room.getOpponent(this);
                             if (opponent != null) {
-                                opponent.sendMessage(msg); // rakibe bildir
+                                opponent.sendMessage(msg); // Inform opponent
                             }
                             room.checkEndCondition();
                             continue;
                         }
+
                         if (msg.type.equals("exit")) {
-                            System.out.println("Oyuncu oyundan ayrıldı (exit mesajı).");
+                            System.out.println("Player exited the game (exit message).");
                             break;
                         }
 
-                        // Diğer mesajları rakibe gönder
+                        // Forward other messages to opponent
                         ClientHandler opponent = room.getOpponent(this);
                         if (opponent != null) {
                             opponent.sendMessage(msg);
@@ -224,12 +233,12 @@ public class ServerSocketHandler {
                     }
                 }
             } catch (IOException | ClassNotFoundException e) {
-                System.out.println("Bir client bağlantısı kesildi.");
+                System.out.println("A client connection was lost.");
             } finally {
                 try {
-                    Thread.sleep(500); // küçük bir bekleme ekleniyor
+                    Thread.sleep(500); // short delay before cleanup
                 } catch (InterruptedException ie) {
-                    ie.printStackTrace(); // veya logla
+                    ie.printStackTrace();
                 }
 
                 try {

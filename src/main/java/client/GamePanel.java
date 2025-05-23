@@ -15,10 +15,17 @@ import java.util.Set;
 
 public class GamePanel extends JFrame {
 
+    // Constants for board size and cell dimensions
     private static final int SIZE = 19;
     private static final int CELL_SIZE = 30;
+
+    // Game board data structures
     private char[][] board = new char[SIZE][SIZE];
     private char[][] previousBoard = new char[SIZE][SIZE];
+    private JTextArea moveLogArea;
+
+
+    // Flags and state variables for gameplay logic
     private boolean iPassed;
     private boolean opponentPassed;
     private ClientSocketHandler socketHandler;
@@ -26,8 +33,10 @@ public class GamePanel extends JFrame {
     private char myColor;
     private Point lastKoPosition = null;
     private List<Point> lastKoCaptured = new ArrayList<>();
-    private int capturedByBlack = 0; // Siyahın aldığı beyaz taş sayısı
-    private int capturedByWhite = 0; // Beyazın aldığı siyah taş sayısı
+    private int capturedByBlack = 0;
+    private int capturedByWhite = 0;
+
+    // UI-related fields
     private JDialog waitingDialog = null;
     private String serverIp;
     private int serverPort;
@@ -35,19 +44,21 @@ public class GamePanel extends JFrame {
     private boolean isGameOver = false;
     private boolean userClosedWindow = false;
 
+    // Constructor to initialize the game panel and UI components
     public GamePanel(String serverIp, int serverPort, ClientSocketHandler handler, String colorPayload) {
         this.serverIp = serverIp;
         this.serverPort = serverPort;
         this.socketHandler = handler;
         this.myColor = colorPayload.equals("Black") ? 'B' : 'W';
         this.isMyTurn = (myColor == 'B');
-        this.initialized = true;
+        this.initialized = true; // Only set true when init and ready are both received
 
         setTitle("Go Game - Game Screen");
         setSize(SIZE * CELL_SIZE + 50, SIZE * CELL_SIZE + 70);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
+        // Panel where the board is drawn
         JPanel panel = new JPanel() {
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
@@ -55,16 +66,18 @@ public class GamePanel extends JFrame {
             }
         };
         panel.setPreferredSize(new Dimension(SIZE * CELL_SIZE, SIZE * CELL_SIZE));
+
+        // Handle mouse click events on the board
         panel.addMouseListener(new MouseAdapter() {
             public void mouseClicked(MouseEvent e) {
                 if (!initialized) {
-                    System.out.println(">>> Tıklama reddedildi: INIT daha gelmedi.");
+                    // System.out.println(">>> Click ignored: INIT not yet received.");
                     return;
                 }
 
                 if (!isMyTurn) {
-                    System.out.println(">>> Tıklama reddedildi. isMyTurn: " + isMyTurn + ", renk: " + myColor);
-                    JOptionPane.showMessageDialog(GamePanel.this, "Sıra sende değil!");
+                    // System.out.println(">>> Click ignored. isMyTurn: " + isMyTurn + ", color: " + myColor);
+                    JOptionPane.showMessageDialog(GamePanel.this, "It's not your turn!");
                     return;
                 }
 
@@ -81,10 +94,11 @@ public class GamePanel extends JFrame {
         });
         add(panel);
 
-        JButton passButton = new JButton("Pas Geç");
+        // Pass button to skip a turn
+        JButton passButton = new JButton("Pass");
         passButton.addActionListener(e -> {
             if (!isMyTurn) {
-                JOptionPane.showMessageDialog(this, "Sıra sende değil, pas geçemezsin!");
+                JOptionPane.showMessageDialog(this, "It's not your turn to pass!");
                 return;
             }
 
@@ -94,24 +108,24 @@ public class GamePanel extends JFrame {
                 socketHandler.sendMessage(new Message("pass", String.valueOf(myColor)));
                 isMyTurn = false;
             } catch (IOException ex) {
-                JOptionPane.showMessageDialog(this, "Pas bilgisi gönderilemedi.");
-
+                JOptionPane.showMessageDialog(this, "Failed to send pass message.");
             }
         });
         add(passButton, BorderLayout.SOUTH);
 
+        // Listen for incoming messages from the server
         new Thread(() -> {
             while (true) {
                 try {
                     Message msg = socketHandler.readMessage();
-                    System.out.println("Sunucudan gelen mesaj: " + msg.type + " - " + msg.payload);
+                    // System.out.println("Message from server: " + msg.type + " - " + msg.payload);
 
                     switch (msg.type) {
                         case "init":
                             myColor = msg.payload.equals("Black") ? 'B' : 'W';
                             isMyTurn = (myColor == 'B');
                             initialized = true;
-                            System.out.println(">>> INIT geldi - Renk: " + myColor + " | isMyTurn: " + isMyTurn);
+                            // System.out.println(">>> INIT received - Color: " + myColor + " | isMyTurn: " + isMyTurn);
                             resetGame();
                             break;
                         case "waiting":
@@ -133,12 +147,11 @@ public class GamePanel extends JFrame {
                             handleIncomingMove(msg.payload);
                             break;
                         case "pass":
-                            handleOpponentPass();  // sadece rakibin pas geçişini işler
+                            handleOpponentPass();
                             break;
                         case "end":
-                            System.out.println("END mesajı geldi, oyun kapanıyor.");
-
-                            isGameOver = true; // ✅ Artık bağlantı koparsa uyarı gösterme
+                            // System.out.println("END message received, game closing.");
+                            isGameOver = true;
 
                             double[] scores = countScoreWithKomi(capturedByBlack, capturedByWhite);
                             double blackScore = scores[0];
@@ -158,75 +171,75 @@ public class GamePanel extends JFrame {
                                 }
                             }).start();
                             break;
-
                         default:
-                            System.out.println("Bilinmeyen mesaj tipi: " + msg.type);
+                        // System.out.println("Unknown message type: " + msg.type);
                     }
                 } catch (Exception e) {
-                    System.out.println("Mesaj okuma hatası: " + e.getMessage());
-
+                    // System.out.println("Message read error: " + e.getMessage());
                     if (!isGameOver && !userClosedWindow) {
                         SwingUtilities.invokeLater(()
-                                -> JOptionPane.showMessageDialog(this, "Rakibin bağlantısı kesildi.")
+                                -> JOptionPane.showMessageDialog(this, "Opponent disconnected.")
                         );
-                    } else {
-                        System.out.println("Oyun bitti veya pencereyi kullanıcı kapattı, uyarı gösterilmiyor.");
                     }
-
                     break;
                 }
-
             }
         }).start();
+
+        // Handle window close event to send exit message to server
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
-                userClosedWindow = true; // ✅ pencereyi kullanıcı kapattıysa
+                userClosedWindow = true;
                 try {
                     if (socketHandler != null) {
                         socketHandler.sendMessage(new Message("exit", ""));
                         socketHandler.close();
-                        System.out.println("Client bağlantısı kapatıldı.");
+                        // System.out.println("Client connection closed.");
                     }
                 } catch (IOException ex) {
                     ex.printStackTrace();
                 }
             }
         });
-
     }
 
     private void handleIncomingMove(String payload) {
+        // Parse the move message received from the opponent
         String[] parts = payload.split(";");
         String[] moveParts = parts[0].split(",");
         int row = Integer.parseInt(moveParts[0]);
         int col = Integer.parseInt(moveParts[1]);
         char color = moveParts[2].charAt(0);
-        board[row][col] = color;
+        board[row][col] = color; // Place the opponent's stone
 
+        // If there are any removed stones included in the message
         if (parts.length > 1 && parts[1].startsWith("removed:")) {
             String[] removedParts = parts[1].substring(8).split("\\|");
             for (String pos : removedParts) {
                 String[] rc = pos.split(",");
                 int r = Integer.parseInt(rc[0]);
                 int c = Integer.parseInt(rc[1]);
-                board[r][c] = '\0';
+                board[r][c] = '\0'; // Clear captured stones from the board
             }
         }
 
+        // Save board state and allow player to take their turn
         previousBoard = copyBoard(board);
         isMyTurn = true;
         iPassed = false;
-        repaint();
+        repaint(); // Redraw the board with updates
     }
 
     private void drawBoard(Graphics g) {
+        // Draw grid lines for the Go board
         g.setColor(Color.BLACK);
         for (int i = 0; i < SIZE; i++) {
             g.drawLine(CELL_SIZE / 2, CELL_SIZE / 2 + i * CELL_SIZE, CELL_SIZE / 2 + (SIZE - 1) * CELL_SIZE, CELL_SIZE / 2 + i * CELL_SIZE);
             g.drawLine(CELL_SIZE / 2 + i * CELL_SIZE, CELL_SIZE / 2, CELL_SIZE / 2 + i * CELL_SIZE, CELL_SIZE / 2 + (SIZE - 1) * CELL_SIZE);
         }
 
+        // Draw stones based on board state
         for (int i = 0; i < SIZE; i++) {
             for (int j = 0; j < SIZE; j++) {
                 if (board[i][j] == 'B') {
@@ -236,50 +249,51 @@ public class GamePanel extends JFrame {
                     g.setColor(Color.WHITE);
                     g.fillOval(j * CELL_SIZE + 5, i * CELL_SIZE + 5, CELL_SIZE - 10, CELL_SIZE - 10);
                     g.setColor(Color.BLACK);
-                    g.drawOval(j * CELL_SIZE + 5, i * CELL_SIZE + 5, CELL_SIZE - 10, CELL_SIZE - 10);
+                    g.drawOval(j * CELL_SIZE + 5, i * CELL_SIZE + 5, CELL_SIZE - 10, CELL_SIZE - 10); // Outline for white stones
                 }
             }
         }
     }
 
     private void resetGame() {
+        // Clear the board and reset state variables
         board = new char[SIZE][SIZE];
         previousBoard = new char[SIZE][SIZE];
         iPassed = false;
         opponentPassed = false;
-        // isMyTurn = (myColor == 'B'); // burada sıra sıfırlanır
         capturedByBlack = 0;
         capturedByWhite = 0;
         lastKoPosition = null;
         lastKoCaptured.clear();
-        //repaint();
     }
 
     private void showWaitingDialog(String message) {
+        // Prevent multiple dialogs from appearing
         if (waitingDialog != null && waitingDialog.isVisible()) {
             return;
         }
 
-        waitingDialog = new JDialog(this, "Bekleniyor...", true);
+        waitingDialog = new JDialog(this, "Waiting...", true);
         waitingDialog.setLayout(new BorderLayout());
 
-        JLabel label = new JLabel("<html><center>" + message + "<br>Lütfen bekleyin...</center></html>", SwingConstants.CENTER);
+        // Display the waiting message
+        JLabel label = new JLabel("<html><center>" + message + "<br>Please wait...</center></html>", SwingConstants.CENTER);
         label.setFont(new Font("Arial", Font.PLAIN, 14));
         waitingDialog.add(label, BorderLayout.CENTER);
 
-        // Ana Menüye Dön butonu
-        JButton backButton = new JButton("Ana Menüye Dön");
+        // Button to return to the start panel
+        JButton backButton = new JButton("Return to Main Menu");
         backButton.addActionListener(e -> {
             try {
-                socketHandler.sendMessage(new Message("exit", "")); // Sunucuya çıkış bildir
-                socketHandler.close(); // Bağlantıyı kapat
-                System.out.println("Ana Menüye dönüldü, bağlantı kapatıldı.");
+                socketHandler.sendMessage(new Message("exit", "")); // Notify server of exit
+                socketHandler.close(); // Close connection
+                System.out.println("Returned to main menu, connection closed.");
             } catch (IOException ex) {
                 ex.printStackTrace();
             }
 
-            waitingDialog.dispose();  // Bekleme penceresini kapat
-            this.dispose();           // GamePanel'i kapat
+            waitingDialog.dispose();  // Close the dialog
+            this.dispose();           // Close the game panel
 
             SwingUtilities.invokeLater(() -> new StartPanel(serverIp, serverPort).setVisible(true));
         });
@@ -291,10 +305,15 @@ public class GamePanel extends JFrame {
         waitingDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
         waitingDialog.setResizable(false);
 
-        // Arkaplanda göster
+        // Run the dialog in a separate thread
         new Thread(() -> waitingDialog.setVisible(true)).start();
     }
 
+    /**
+     * Attempts to place a stone on the board. Handles opponent capture, suicide
+     * rule, and KO rule. Returns true if the stone was placed successfully,
+     * false otherwise.
+     */
     private boolean placeStone(int row, int col, List<Point> removed) {
         if (!isValid(row, col) || board[row][col] != '\0') {
             return false;
@@ -303,10 +322,10 @@ public class GamePanel extends JFrame {
         char currentColor = myColor;
         char opponentColor = (myColor == 'B') ? 'W' : 'B';
 
-        // 1. Taş yerleştir (geçici olarak)
+        // 1. Tentatively place the stone
         board[row][col] = currentColor;
 
-        // 2. Rakip taşlarını kontrol et
+        // 2. Check and capture opponent stones if they have no liberty
         for (int[] dir : new int[][]{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}) {
             int newRow = row + dir[0];
             int newCol = col + dir[1];
@@ -318,38 +337,39 @@ public class GamePanel extends JFrame {
             }
         }
 
-        // KO kuralı kontrolü: sadece karşıdan alınan taş 1 ise kontrol et
+        // 3. KO rule: prevent placing a stone that immediately reverts to the previous state
         if (lastKoPosition != null && removed.size() == 1) {
             Point last = lastKoCaptured.get(0);
             if (row == lastKoPosition.x && col == lastKoPosition.y
                     && removed.get(0).x == last.x && removed.get(0).y == last.y) {
-                // Taş geri alınmalı
+                // Undo placement and reject move
                 board[row][col] = '\0';
                 removed.clear();
-                JOptionPane.showMessageDialog(this, "Ko kuralı: Bu hamleye izin verilmiyor.");
+                JOptionPane.showMessageDialog(this, "KO rule: This move is not allowed.");
                 return false;
             }
         }
 
-        // 3. Eğer rakip taşları kaldırılacaksa uygula
+        // 4. Remove captured stones
         if (!removed.isEmpty()) {
             for (Point p : removed) {
                 board[p.x][p.y] = '\0';
             }
         }
 
-        // 4. Kendi taşının özgürlüğü var mı kontrol et
+        // 5. Check if our own stone is suicidal (no liberties)
         boolean[][] selfVisited = new boolean[SIZE][SIZE];
         if (!hasLiberty(row, col, currentColor, selfVisited)) {
+            // Undo placement and restore opponent stones
             board[row][col] = '\0';
             for (Point p : removed) {
-                board[p.x][p.y] = opponentColor; // geri yükle
+                board[p.x][p.y] = opponentColor;
             }
             removed.clear();
             return false;
         }
 
-        // 5. KO durumu güncelle
+        // 6. Update KO state
         if (removed.size() == 1) {
             lastKoPosition = new Point(row, col);
             lastKoCaptured = new ArrayList<>(removed);
@@ -358,7 +378,7 @@ public class GamePanel extends JFrame {
             lastKoCaptured.clear();
         }
 
-        // 6. Sayacı güncelle
+        // 7. Update capture counters
         if (myColor == 'B') {
             capturedByBlack += removed.size();
         } else {
@@ -368,6 +388,10 @@ public class GamePanel extends JFrame {
         return true;
     }
 
+    /**
+     * Collects the coordinates of the stones marked for removal in the visited
+     * matrix.
+     */
     private void collectRemoved(boolean[][] visited, List<Point> list) {
         for (int i = 0; i < SIZE; i++) {
             for (int j = 0; j < SIZE; j++) {
@@ -378,15 +402,11 @@ public class GamePanel extends JFrame {
         }
     }
 
-//    private void removeStones(boolean[][] visited) {
-//        for (int i = 0; i < SIZE; i++) {
-//            for (int j = 0; j < SIZE; j++) {
-//                if (visited[i][j]) {
-//                    board[i][j] = '\0';
-//                }
-//            }
-//        }
-//    }
+    /**
+     * Checks whether a group of stones starting from (row, col) has any
+     * liberties (empty adjacent cells). Uses depth-first search to traverse
+     * connected stones of the same color.
+     */
     private boolean hasLiberty(int row, int col, char color, boolean[][] visited) {
         if (!isValid(row, col) || visited[row][col] || board[row][col] != color) {
             return false;
@@ -411,43 +431,51 @@ public class GamePanel extends JFrame {
         return false;
     }
 
+    // Checks whether the given row and column are within the bounds of the board.
     private boolean isValid(int row, int col) {
         return row >= 0 && row < SIZE && col >= 0 && col < SIZE;
     }
 
+// Sends a move message to the opponent, including any captured stones.
     private void sendMove(int row, int col, char color, List<Point> removed) {
         StringBuilder payload = new StringBuilder(row + "," + col + "," + color);
+
+        // If there are captured stones, append their positions to the payload.
         if (!removed.isEmpty()) {
             payload.append(";removed:");
             for (Point p : removed) {
                 payload.append(p.x).append(",").append(p.y).append("|");
             }
-            payload.setLength(payload.length() - 1); // sondaki |
+            payload.setLength(payload.length() - 1); // Remove the last '|'
         }
+
         try {
             socketHandler.sendMessage(new Message("move", payload.toString()));
         } catch (IOException e) {
-            JOptionPane.showMessageDialog(this, "Hamle gönderilemedi.");
+            JOptionPane.showMessageDialog(this, "Move could not be sent.");
         }
     }
 
+// Handles the event when the opponent passes their turn.
     public void handleOpponentPass() {
         opponentPassed = true;
 
+        // If the current player did not also pass, they get the next turn.
         if (!iPassed) {
-            JOptionPane.showMessageDialog(this, "Rakip pas geçti. Sıra sende.");
+            JOptionPane.showMessageDialog(this, "Opponent passed. It's your turn.");
             isMyTurn = true;
             iPassed = false;
         }
-        // Eğer iPassed == true ise zaten "end" mesajı birazdan gelecek, hiçbir şey yapma
+        // If both players passed, the server will handle ending the game.
     }
 
+// Calculates the final score for both players, including komi for White.
     private double[] countScoreWithKomi(int capturedByBlack, int capturedByWhite) {
         boolean[][] visited = new boolean[SIZE][SIZE];
         double black = 0, white = 0;
         double komi = 6.5;
 
-        // 1. Tahtadaki mevcut taşları say
+        // 1. Count the stones currently on the board.
         for (int row = 0; row < SIZE; row++) {
             for (int col = 0; col < SIZE; col++) {
                 if (board[row][col] == 'B') {
@@ -458,7 +486,7 @@ public class GamePanel extends JFrame {
             }
         }
 
-        // 2. Boş bölgeleri tara ve çevreleyen renge göre puan ekle
+        // 2. Scan empty territories and add them to the score of the surrounding color.
         for (int row = 0; row < SIZE; row++) {
             for (int col = 0; col < SIZE; col++) {
                 if (board[row][col] == '\0' && !visited[row][col]) {
@@ -478,12 +506,13 @@ public class GamePanel extends JFrame {
             }
         }
 
-        // 3. Komi ekle
+        // 3. Add komi points to White's final score.
         white += komi;
         return new double[]{black, white};
     }
-// floodFill metodu: boş bölgeyi bul ve etrafındaki taş renklerini topla
 
+// Helper method that performs a flood fill from a given point,
+// determining the surrounding colors and collecting the empty region.
     private boolean floodFillRegion(int r, int c, boolean[][] visited, List<Point> region, Set<Character> surrounding) {
         boolean surrounded = true;
         Queue<Point> queue = new LinkedList<>();
@@ -499,8 +528,9 @@ public class GamePanel extends JFrame {
                 int nr = p.x + d[0];
                 int nc = p.y + d[1];
 
+                // If out of bounds, the region is not surrounded.
                 if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) {
-                    surrounded = false; // Tahta dışına çıkıyorsa çevrili değildir
+                    surrounded = false;
                     continue;
                 }
 
@@ -519,6 +549,7 @@ public class GamePanel extends JFrame {
         return surrounded;
     }
 
+// Creates a deep copy of the current board state.
     private char[][] copyBoard(char[][] src) {
         char[][] newBoard = new char[SIZE][SIZE];
         for (int i = 0; i < SIZE; i++) {
@@ -526,15 +557,4 @@ public class GamePanel extends JFrame {
         }
         return newBoard;
     }
-
-//    private boolean isBoardEqual(char[][] a, char[][] b) {
-//        for (int i = 0; i < SIZE; i++) {
-//            for (int j = 0; j < SIZE; j++) {
-//                if (a[i][j] != b[i][j]) {
-//                    return false;
-//                }
-//            }
-//        }
-//        return true;
-//    }
 }

@@ -1,17 +1,19 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package shared;
 
 import java.io.Serializable;
 
+// Message is used to send data between client and server
 public class Message implements Serializable {
-public String type; // "move", "connect", "end"
-public String payload;
 
-public Message(String type, String payload) {
-    this.type = type;
-    this.payload = payload;
-}
+    // Type of the message (e.g., move, connect, end)
+    public String type;
+
+    // Actual data of the message
+    public String payload;
+
+    // Creates a new message with a given type and payload
+    public Message(String type, String payload) {
+        this.type = type;
+        this.payload = payload;
+    }
 }
