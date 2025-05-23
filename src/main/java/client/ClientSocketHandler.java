@@ -16,11 +16,24 @@ public class ClientSocketHandler {
     private ObjectInputStream in;
 
     public ClientSocketHandler(String serverIp, int port) throws IOException {
-        socket = new Socket(serverIp, port);
-        out = new ObjectOutputStream(socket.getOutputStream());
-        in = new ObjectInputStream(socket.getInputStream());
+        int attempts = 0;
+        while (attempts < 5) {
+            try {
+                socket = new Socket(serverIp, port);
+                out = new ObjectOutputStream(socket.getOutputStream());
+                in = new ObjectInputStream(socket.getInputStream());
+                return;
+            } catch (IOException e) {
+                attempts++;
+                System.out.println("Bağlantı denemesi başarısız. Tekrar deneniyor...");
+                try {
+                    Thread.sleep(1000); // 1 saniye bekle
+                } catch (InterruptedException ignored) {
+                }
+            }
+        }
+        throw new IOException("Sunucuya bağlanılamadı.");
     }
-
 
     public void sendMessage(Message msg) throws IOException {
         out.writeObject(msg);

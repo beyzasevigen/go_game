@@ -51,31 +51,42 @@ public class ServerSocketHandler {
             return players.size() < 2;
         }
 
-        public void addPlayer(Socket socket) throws IOException {
+        public void addPlayer(Socket socket) {
             if (players.size() >= 2) {
                 return;
             }
 
-            ClientHandler handler = new ClientHandler(socket, this);
-            players.add(handler);
-
-            new Thread(handler).start();
+            try {
+                ClientHandler handler = new ClientHandler(socket, this);
+                players.add(handler);
+                new Thread(handler).start();
+            } catch (IOException e) {
+                e.printStackTrace();
+                System.out.println("❌ ClientHandler oluşturulamadı, oyuncu eklenemedi.");
+                return;
+            }
 
             if (players.size() == 2) {
-                // 🔁 Renkleri sıfırdan ata
-                players.get(0).setColor(COLORS[0]); // BLACK
-                players.get(0).setPlayerIndex(0);
-                players.get(1).setColor(COLORS[1]); // WHITE
-                players.get(1).setPlayerIndex(1);
+                ClientHandler p1 = players.get(0);
+                ClientHandler p2 = players.get(1);
 
-                // Herkese yeni rengi gönder
-                for (ClientHandler p : players) {
-                    p.setPassed(false);
-                    System.out.println(">>> Sunucu INIT gönderiyor: " + p.getColor());
-                    p.sendMessage(new Message("init", p.getColor()));
+                if (p1 != null && p2 != null && p1.isAlive() && p2.isAlive()) {
+                    p1.setColor(COLORS[0]); // BLACK
+                    p1.setPlayerIndex(0);
+                    p2.setColor(COLORS[1]); // WHITE
+                    p2.setPlayerIndex(1);
+
+                    for (ClientHandler p : players) {
+                        p.setPassed(false);
+                        System.out.println(">>> Sunucu INIT gönderiyor: " + p.getColor());
+                        p.sendMessage(new Message("init", p.getColor()));
+                    }
+
+                    broadcast(new Message("ready", "Game is ready!"));
+                } else {
+                    System.out.println("❗ Oyuncular geçersiz ya da bağlantı kopmuş. Oyun başlatılamıyor.");
+                    players.clear(); // oda bozuksa sıfırla
                 }
-
-                broadcast(new Message("ready", "Game is ready!"));
             }
         }
 
@@ -84,10 +95,24 @@ public class ServerSocketHandler {
             System.out.println("Oyuncu odadan ayrıldı.");
 
             if (players.isEmpty()) {
-                ServerSocketHandler.rooms.remove(this); // ❗ Oda boşsa temizle
+                ServerSocketHandler.rooms.remove(this);
                 System.out.println("Oda boş kaldı, silindi.");
+            } else if (players.size() == 1) {
+                ClientHandler remaining = players.get(0);
+
+                // Güvenli bağlantı kontrolü
+                if (remaining != null && remaining.isAlive()) {
+                    remaining.sendMessage(new Message("waiting", "Rakip bağlantıyı kaybetti. Yeni oyuncu bekleniyor..."));
+                } else {
+                    System.out.println("❗ Kalan oyuncu bağlantısını kaybetmiş. Oda temizleniyor.");
+                    players.clear();
+                    ServerSocketHandler.rooms.remove(this);
+                }
             } else {
-                players.get(0).sendMessage(new Message("waiting", "Rakip bağlantıyı kaybetti. Yeni oyuncu bekleniyor..."));
+                // Teorik olarak 2+ oyuncu olmamalı ama yine de koruyalım
+                System.out.println("⚠ Uyarı: Odaya beklenmeyen şekilde fazla oyuncu var.");
+                players.clear();
+                ServerSocketHandler.rooms.remove(this);
             }
         }
 
@@ -134,6 +159,10 @@ public class ServerSocketHandler {
             this.room = room;
             this.out = new ObjectOutputStream(socket.getOutputStream());
             this.in = new ObjectInputStream(socket.getInputStream());
+        }
+
+        public boolean isAlive() {
+            return socket != null && !socket.isClosed() && socket.isConnected();
         }
 
         public void setColor(String color) {
@@ -197,6 +226,12 @@ public class ServerSocketHandler {
             } catch (IOException | ClassNotFoundException e) {
                 System.out.println("Bir client bağlantısı kesildi.");
             } finally {
+                try {
+                    Thread.sleep(500); // küçük bir bekleme ekleniyor
+                } catch (InterruptedException ie) {
+                    ie.printStackTrace(); // veya logla
+                }
+
                 try {
                     socket.close();
                     room.removePlayer(this);
